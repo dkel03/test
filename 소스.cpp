@@ -4,7 +4,7 @@
 #include <string.h>
 #include <assert.h>
 
-#define MAX_YEAR_DURATION	10	// 기간
+#define MAX_YEAR_DURATION 10	// 기간
 
 // 구조체 선언
 typedef struct {
@@ -71,13 +71,14 @@ void destroy_names(tNames *pnames)
 
 void load_names(FILE* fp, int year_index, tNames* names) {
     int ret; char temp[30];
-    tName n = { "",' ',{ 0, } }; // 구조체 n 초기화
-
     fopen("fp", "r");
 
     while (1) {
-        int isName=0, tName_index=0;
-
+        int tName_index=0;
+        tName *n = (tName *)malloc(sizeof(tName)); // 구조체 n 초기화
+        for (int i = 0; i < 10; i++) {
+            n->freq[i] = 0;
+        }
         ret = fscanf(fp, "%s", temp);
         if (ret == EOF)
             break;
@@ -86,13 +87,13 @@ void load_names(FILE* fp, int year_index, tNames* names) {
         for (int i = 0; i<3; i++) {
             switch (i) {
             case 0:
-                strcpy(n.name, ptr);
+                strcpy(n->name, ptr);
                 break;
             case 1:
-                n.sex = *ptr;
+                n->sex = *ptr;
                 break;
             case 2:
-                n.freq[year_index] = atoi(ptr);
+                n->freq[year_index] = atoi(ptr);
                 break;
             default:
                 break;
@@ -106,20 +107,16 @@ void load_names(FILE* fp, int year_index, tNames* names) {
         }
 
         //여기를 코딩해야함 ↓ (tNames에 집어넣을때 애초에 정렬되도록 삽입해야함)
-        tName_index = binary_search(&n, names->data, names->len, sizeof(tName), compare);
-        if (tName_index)
-           printf("%s, %s \n", names->data[tName_index].name, n.name);
-        for (int i = 0; i < names->len; i++) {
-            if (!strcmp(names->data[i].name, n.name) && (names->data[i].sex == n.sex)) {
-                names->data[i].freq[year_index] = n.freq[year_index];
-                isName = 1;
-                break;
-            }
-        }
-        if (!isName) {
-            names->data[names->len] = n;
+        tName_index = binary_search(n, names->data, names->len, sizeof(tName), compare);
+        if (!strcmp(names->data[tName_index].name, n->name) && (names->data[tName_index].sex == n->sex))
+            names->data[tName_index].freq[year_index] = n->freq[year_index];
+        else {
+            tName* dataPtr = names->data;
+            memmove(dataPtr + (tName_index + 1), dataPtr + tName_index, (names->len - tName_index)*sizeof(tName)); // 메모리를 한칸 밀고,
+            memcpy(dataPtr + tName_index, n, sizeof(tName)); // 해당 인덱스에 삽입
             names->len++;
         }
+        free(n);
     }
 }
 
@@ -134,14 +131,37 @@ int compare(const void *n1, const void *n2) {
 }
 
 int binary_search(const void *key, const void *base, size_t nmemb, size_t size, int(*compare)(const void *, const void *)) {
+    int start = 0, mid, end = nmemb - 1;
     tName* b_result = (tName*)bsearch(key, base, nmemb, size, compare);
-    if (b_result && (b_result->sex == ((tName*)key)->sex)) { // 이름이 존재하고, 성별까지 같다면
-       printf("%s, %s, %c, %c\n", b_result->name, ((tName*)key)->name, b_result->sex, ((tName*)key)->sex);
-//        printf("%d \n", (b_result - (tName*)base) / size);
-        return ((b_result - (tName*)base) / size); // 그 이름이 존재하는 인덱스 반환
+
+    if (b_result && (b_result->sex == ((tName*)key)->sex))// 이름이 존재하고, 성별까지 같다면
+        return b_result - (tName*)base; // 그 이름이 존재하는 인덱스 반환
+
+    else if (nmemb > 0) { // 구조체 배열에 원소가 있고, 이름이 없다면
+        while (start <= end) { // 이진 탐색으로 자리를 찾아
+            mid = (start + end) / 2;
+            int cmp = strcmp(((tName*)base)[mid].name, ((tName*)key)->name);
+            if (cmp == 0) {
+                if (((tName*)base)[mid].sex == ((tName*)key)->sex)
+                    return mid;
+                if (((tName*)base)[mid].sex == 'F')
+                    return mid + 1;
+                if (((tName*)base)[mid].sex == 'M') {
+                    if (!strcmp(((tName*)base)[mid - 1].name, ((tName*)key)->name) && ((tName*)base)[mid - 1].sex == 'F')
+                        return mid - 1;
+                    else
+                        return mid;
+                }
+            }
+            else if (cmp == 1)
+                end = mid - 1;
+            else
+                start = mid + 1;
+        }
+        return start;   // 인덱스를 반환
     }
-    else
-        return 0;
+    // 배열에 원소가 없다면 
+    return 0; // 0 반환
 }
 
 
